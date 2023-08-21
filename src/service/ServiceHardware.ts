@@ -39,6 +39,7 @@ export default class ServiceHardware {
       {
         path,
         coin: 'btc',
+        showOnOneKey: false,
       }
     );
     if (response.success) {

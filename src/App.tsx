@@ -12,7 +12,7 @@ function App() {
     setDevice(deviceResult);
   };
   const getXpub = () => {
-    serviceHardware.getPublicKey("m/84'/0'/0'/0/0").then((pubkey) => {
+    serviceHardware.getPublicKey("m/84'/0'/0'").then((pubkey) => {
       console.log(pubkey);
       bitcoinProvider.xpubToAddresses(pubkey.xpub, ['0/0']);
     });
