@@ -15,12 +15,23 @@ module.exports = {
             endOfLine: 'auto',
           },
         ],
+        'import/no-extraneous-dependencies': [
+          'error',
+          { devDependencies: true },
+        ],
       },
     },
     {
       files: ['*.ts', '*.tsx'],
       extends: ['wesbos/typescript'],
-      rules: {},
+      rules: {
+        '@typescript-eslint/ban-ts-comment': 'off',
+        'class-methods-use-this': 'off',
+        'import/no-extraneous-dependencies': [
+          'error',
+          { devDependencies: true },
+        ],
+      },
     },
   ],
 };
