@@ -10,7 +10,7 @@ import { NETWORK } from './constants';
 function App() {
   const [network, setNetwork] = useLocalStorage(NETWORK, 'mainnet');
   const isTestnet = network === 'testnet';
-  const path = `m/84'/${isTestnet ? 1 : 0}'/2'`;
+  const path = `m/44'/${isTestnet ? 1 : 0}'/1'`;
   const [address, setAddress] = useState('');
   const [device, setDevice] = useState<typeof serviceHardware.device>(
     serviceHardware.device
@@ -45,7 +45,8 @@ function App() {
 
     bitcoinProvider.buildTransaction({
       to: '2N1n8YcwYgf3ng171pLsUyzR7AGqrBSN9Kj',
-      amount: '0.003',
+      // to: 'tb1qdnecmpytuytjsphy2jcyrtvpgyv3ldhy65xvjc',
+      amount: '0.01',
       xpub: xpubRef.current?.xpubSegwit ?? '',
       derivePath: `${path}/0/0`,
       currentAddress: address,
@@ -83,16 +84,6 @@ function App() {
       </button>
       <button type="button" onClick={buildTx}>
         build transaction
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          bitcoinProvider.comparePsbt(
-            'cHNidP8BAHICAAAAAfERlVhBehCyubLgATvGWVgVRYweog0eQv1oh+ZK/3LZAAAAAAD/////AuCTBAAAAAAAF6kUXZlbocogvyW8doarGvQGot+qq/yHXgwDAAAAAAAWABSDWFb9d8MvTa3QYLmKa5c/jVZFWQAAAAAAAQDfAQAAAAABAWRWeUm6+Ip6uMLTDAfL6Qk8sBstSYie1tFHMzdccoATBQAAAAD/////AiChBwAAAAAAFgAUg1hW/XfDL02t0GC5imuXP41WRVn7rBUAAAAAABYAFKEuSda2AvijGbkp+H88VyChZOWIAkgwRQIhAIFpUv3umyy3U0rbUnDsqVbtmyOHEoIPxe4MKMV2CFhjAiBJ06dFeZCgIYXeGAJFxknoSRy+F90U//g8ZA1DU6zvlwEhA+moiCgqlic0Y6zSU3wjY+0e3sUov7s1Wgcy+4FNWOwIAAAAAAEBHyChBwAAAAAAFgAUg1hW/XfDL02t0GC5imuXP41WRVkiAgOcytS5ey+xakf+R9M+U8UvE6oNd1CcJx7eTs2LfVRAUkcwRAIgZIzY+5LtIDQBC1YLYoCwd4amF1n1vv+pXGBlLn8/SngCIFdCOPfHDWWHIISEtk6Ilo88czaZ75wFKuVDXzYnpPjcASIGA5zK1Ll7L7FqR/5H0z5TxS8Tqg13UJwnHt5OzYt9VEBSGND69yNUAACAAQAAgAIAAIAAAAAAAAAAAAAAIgIDnMrUuXsvsWpH/kfTPlPFLxOqDXdQnCce3k7Ni31UQFIY0Pr3I1QAAIABAACAAgAAgAAAAAAAAAAAAA=='
-          );
-        }}
-      >
-        compare psbt
       </button>
     </div>
   );

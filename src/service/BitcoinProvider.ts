@@ -279,14 +279,16 @@ export default class BitcoinProvider {
       device.deviceId ?? '',
       {
         coin: this.networkType === 'mainnet' ? 'btc' : 'test',
-        inputs: inputs.map((i) =>
-          this.buildHardwareInput(i, pathMap[i.address])
-        ),
+        inputs: inputs.map((i, index) => {
+          const txInput = psbt.txInputs[index];
+          return this.buildHardwareInput(i, pathMap[i.address], txInput);
+        }),
         outputs: outputs.map((o) => this.buildHardwareOutput(o)),
         refTxs: Object.values(prevTxs).map((i) => this.buildPrevTx(i)),
+        locktime: psbt.locktime,
+        version: psbt.version,
       }
     );
-    console.log('response ====>>>: ', signatures);
 
     // eslint-disable-next-line no-plusplus
     for (let i = 0; i < inputs.length; i++) {
@@ -378,13 +380,12 @@ export default class BitcoinProvider {
         },
       ];
 
-      mixin.nonWitnessUtxo = Buffer.from(
-        nonWitnessPrevTxs[input.txid as string],
-        'hex'
-      );
-
       switch (encoding) {
         case AddressEncodings.P2PKH:
+          mixin.nonWitnessUtxo = Buffer.from(
+            nonWitnessPrevTxs[input.txid as string],
+            'hex'
+          );
           break;
         case AddressEncodings.P2WPKH:
           mixin.witnessUtxo = {
@@ -431,15 +432,10 @@ export default class BitcoinProvider {
           break;
       }
 
-      console.log('===>mixin: ', mixin);
       psbt.addInput({
         hash: input.txid,
         index: input.vout,
         ...mixin,
-        // witnessUtxo: mixin.witnessUtxo,
-        // redeemScript: mixin.redeemScript,
-        // nonWitnessUtxo: mixin.nonWitnessUtxo,
-        // nonWitnessUtxo: mixin.nonWitnessUtxo,
       });
     }
 
@@ -472,12 +468,11 @@ export default class BitcoinProvider {
     return psbt;
   }
 
-  comparePsbt(psbtStr: string) {
-    const psbt = BitcoinJS.Psbt.fromBase64(psbtStr);
-    console.log('===>compare psbt: ', psbt);
-  }
-
-  buildHardwareInput(input: UTXO, path: string): Messages.TxInputType {
+  buildHardwareInput(
+    input: UTXO,
+    path: string,
+    txInput: BitcoinJS.PsbtTxInput
+  ): Messages.TxInputType {
     const addressN = getHDPath(path);
     const scriptType = getScriptType(addressN);
     // @ts-expect-error
@@ -487,6 +482,7 @@ export default class BitcoinProvider {
       amount: `${input.value}`,
       address_n: addressN,
       script_type: scriptType,
+      sequence: txInput.sequence,
     };
   }
 

@@ -81,12 +81,11 @@ export default class ServiceHardware {
     params: BTCSignTransactionParams
   ) {
     const hardwareSDK = await this.getSDKInstance();
-    const response = await hardwareSDK.btcSignTransaction(connectId, deviceId, {
-      coin: params.coin,
-      inputs: params.inputs,
-      outputs: params.outputs,
-      refTxs: params.refTxs,
-    });
+    const response = await hardwareSDK.btcSignTransaction(
+      connectId,
+      deviceId,
+      params
+    );
 
     if (response.success) {
       return response.payload;
