@@ -155,7 +155,6 @@ export default class BitcoinProvider {
         ret[relativePath] = address;
       }
     }
-    console.log(ret);
     return ret;
   }
 
@@ -268,7 +267,6 @@ export default class BitcoinProvider {
     pubkeys.forEach((pubkey) => {
       pubkeyMap[pubkey.path] = pubkey;
     });
-    console.log('pubkeys: =====>>>>>: ', pubkeys);
 
     const prevTxs = await this.collectTxs(prevTxids);
 
@@ -290,8 +288,7 @@ export default class BitcoinProvider {
       }
     );
 
-    // eslint-disable-next-line no-plusplus
-    for (let i = 0; i < inputs.length; i++) {
+    for (let i = 0; i < inputs.length; i += 1) {
       const input = inputs[i];
       psbt.updateInput(i, {
         partialSig: [
@@ -305,8 +302,6 @@ export default class BitcoinProvider {
         ],
       });
     }
-    console.log('====>final psbt: ', psbt);
-    console.log(psbt.toBase64());
     psbt.validateSignaturesOfAllInputs(validator);
     return {
       unsignedPsbt,
@@ -361,8 +356,7 @@ export default class BitcoinProvider {
     const psbt = new BitcoinJS.Psbt({
       network: this.network,
     });
-    // eslint-disable-next-line no-plusplus
-    for (let i = 0; i < inputs.length; ++i) {
+    for (let i = 0; i < inputs.length; i += 1) {
       const input = inputs[i];
       const encoding = inputAddressesEncodings[i];
       const mixin: TransactionMixin = {};
@@ -461,9 +455,6 @@ export default class BitcoinProvider {
         ...mixin,
       });
     });
-
-    console.log('=======>>>>>>>>>>>Initialize PSBT: ', psbt);
-    console.log(psbt.toBase64());
 
     return psbt;
   }
