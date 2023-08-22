@@ -1,4 +1,4 @@
-import { UI_REQUEST } from '@onekeyfe/hd-core';
+import { UI_EVENT, UI_REQUEST, UI_RESPONSE } from '@onekeyfe/hd-core';
 import type {
   BTCPublicKey,
   BTCSignTransactionParams,
@@ -8,12 +8,21 @@ import type {
 import { getHardwareSDKInstance } from './hardwareInstance';
 import { BitcoinNetwork } from '../types';
 import { getFromLocalStorage } from '../utils';
-import { NETWORK } from '../constants';
+import {
+  NETWORK,
+  UI_REQUEST_REQUEST_BUTTON,
+  UI_REQUEST_REQUEST_PASSPHRASE,
+  UI_REQUEST_REQUEST_PIN,
+  UI_REQUEST_CLOSE_UI_WINDOW,
+} from '../constants';
+import eventBus from '../utils/event-bus';
 
 export default class ServiceHardware {
   device: KnownDevice | null = null;
 
   network: BitcoinNetwork;
+
+  isRegistred = false;
 
   constructor() {
     this.network = getFromLocalStorage(NETWORK, 'mainnet');
@@ -21,8 +30,34 @@ export default class ServiceHardware {
 
   getSDKInstance() {
     return getHardwareSDKInstance().then((instance) => {
-      instance.on(UI_REQUEST.REQUEST_PIN, (message: CoreMessage) => {
-        console.log('REQUEST_PIN', message);
+      if (this.isRegistred) return instance;
+      this.isRegistred = true;
+      instance.on(UI_EVENT, (message: CoreMessage) => {
+        if (message.type === UI_REQUEST.REQUEST_PIN) {
+          // enter pin code on the device
+          instance.uiResponse({
+            type: UI_RESPONSE.RECEIVE_PIN,
+            payload: '@@ONEKEY_INPUT_PIN_IN_DEVICE',
+          });
+          eventBus.publish(UI_REQUEST_REQUEST_PIN, message);
+        }
+        if (message.type === UI_REQUEST.REQUEST_PASSPHRASE) {
+          instance.uiResponse({
+            type: UI_RESPONSE.RECEIVE_PASSPHRASE,
+            payload: {
+              value: '',
+              passphraseOnDevice: true,
+              save: false,
+            },
+          });
+          eventBus.publish(UI_REQUEST_REQUEST_PASSPHRASE, message);
+        }
+        if (message.type === UI_REQUEST.REQUEST_BUTTON) {
+          eventBus.publish(UI_REQUEST_REQUEST_BUTTON, message);
+        }
+        if (message.type === UI_REQUEST.CLOSE_UI_WINDOW) {
+          eventBus.publish(UI_REQUEST_CLOSE_UI_WINDOW, message);
+        }
       });
       return instance;
     });

@@ -25,15 +25,32 @@ import {
   Code,
   useToast,
   useClipboard,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  ModalCloseButton,
+  useDisclosure,
 } from '@chakra-ui/react';
-import { useLocalStorage } from 'react-use';
-import { ACCOUNT_INDEX, NETWORK, PURPOSE } from '../constants';
+import { useLocalStorage, useEffectOnce } from 'react-use';
+import {
+  ACCOUNT_INDEX,
+  NETWORK,
+  PURPOSE,
+  UI_REQUEST_CLOSE_UI_WINDOW,
+  UI_REQUEST_REQUEST_BUTTON,
+  UI_REQUEST_REQUEST_PASSPHRASE,
+  UI_REQUEST_REQUEST_PIN,
+} from '../constants';
 import { useHardware } from './useHardware';
 import { bitcoinProvider } from '../service/BitcoinProvider';
+import eventBus from '../utils/event-bus';
 
 function Dashboard() {
   const toast = useToast();
-  const { onCopy, value, setValue, hasCopied } = useClipboard('');
+  const { onCopy, setValue, hasCopied } = useClipboard('');
   const [network, setNetwork] = useLocalStorage(NETWORK, 'mainnet');
   const isTestnet = network === 'testnet';
   const [purpose, setPurpose] = useLocalStorage(PURPOSE, '84');
@@ -44,6 +61,33 @@ function Dashboard() {
   );
   const { device, getDevice, isConnecting, isLoading, accountAddress, signTx } =
     useHardware();
+
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [eventContent, setEventContent] = useState('');
+  useEffectOnce(() => {
+    eventBus.subscribe(UI_REQUEST_REQUEST_PIN, () => {
+      setEventContent('Please enter pin code');
+      onOpen();
+    });
+    eventBus.subscribe(UI_REQUEST_REQUEST_PASSPHRASE, () => {
+      setEventContent('Please enter passphrase');
+      onOpen();
+    });
+    eventBus.subscribe(UI_REQUEST_REQUEST_BUTTON, () => {
+      setEventContent('Please confirm on device');
+      onOpen();
+    });
+    eventBus.subscribe(UI_REQUEST_CLOSE_UI_WINDOW, () => {
+      onClose();
+    });
+    return () => {
+      eventBus.remove(UI_REQUEST_REQUEST_PIN);
+      eventBus.remove(UI_REQUEST_REQUEST_PASSPHRASE);
+      eventBus.remove(UI_REQUEST_REQUEST_BUTTON);
+      eventBus.remove(UI_REQUEST_CLOSE_UI_WINDOW);
+    };
+  });
+
   const [address, setAddress] = useState('');
   const [amount, setAmount] = useState('');
   const [unsignedPsbtCode, setUnSignedPsbtCode] = useState('');
@@ -219,6 +263,22 @@ function Dashboard() {
           </Stack>
         </CardBody>
       </Card>
+      <Modal isOpen={isOpen} onClose={onClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Action</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text>{eventContent}</Text>
+          </ModalBody>
+
+          <ModalFooter>
+            <Button colorScheme="blue" mr={3} onClick={onClose}>
+              Close
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Container>
   );
 }
