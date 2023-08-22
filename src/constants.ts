@@ -8,4 +8,6 @@ export enum AddressEncodings {
 
 export const NETWORK = 'NETWORK';
 export const PREV_XPUB = 'PREV_XPUB';
+export const PURPOSE = 'PURPOSE';
+export const ACCOUNT_INDEX = 'ACCOUNT_INDEX';
 export const Decimals = 8;

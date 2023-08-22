@@ -237,7 +237,7 @@ export default class BitcoinProvider {
       fee,
     } = coinSelect(utxos, targets, feeRate);
     if (!inputs || !coinSelectOutputs || isNil(fee)) {
-      throw new Error('Failed to select UTXOs');
+      throw new Error('Insufficient Balance');
     }
 
     const changePath = derivePath;

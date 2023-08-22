@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import axios, { AxiosInstance } from 'axios';
 import memoizee from 'memoizee';
 import { BitcoinNetwork, MempoolRecommendedFee, IUTXO } from '../types';
@@ -46,14 +49,22 @@ export default class Blockbook {
   );
 
   async getRawTransaction(txid: string): Promise<string> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const resp = await this.request
       .get(`/api/v2/tx/${txid}`)
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       .then((i) => i.data);
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     return resp.hex as unknown as string;
+  }
+
+  async broadcastTransaction(rawTx: string): Promise<string> {
+    const res = await this.request
+      .post(`/api/v2/sendtx/`, rawTx, {
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+      })
+      .then((i) => i.data);
+    return res?.result ?? '';
   }
 }
 
