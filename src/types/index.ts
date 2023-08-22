@@ -1,4 +1,11 @@
 import * as BitcoinJS from 'bitcoinjs-lib';
+import type {
+  Bip32Derivation,
+  NonWitnessUtxo,
+  RedeemScript,
+  TapInternalKey,
+  WitnessUtxo,
+} from 'bip174/src/lib/interfaces';
 import { AddressEncodings } from '../constants';
 
 export interface IUTXO {
@@ -24,3 +31,18 @@ export interface INetwork extends BitcoinJS.Network {
   //   - segwit address version bytes
   segwitVersionBytes: Record<AddressEncodings, BitcoinJS.Network['bip32']>;
 }
+
+export type AddressValidation = {
+  isValid: boolean;
+  normalizedAddress?: string;
+  displayAddress?: string;
+  encoding?: string;
+};
+
+export type TransactionMixin = {
+  nonWitnessUtxo?: NonWitnessUtxo;
+  witnessUtxo?: WitnessUtxo;
+  redeemScript?: RedeemScript;
+  tapInternalKey?: TapInternalKey;
+  bip32Derivation?: Bip32Derivation[];
+};

@@ -10,11 +10,20 @@ import {
   getScriptType,
   getOutputScriptType,
 } from '@onekeyfe/hd-core';
-import type { KnownDevice, RefTransaction } from '@onekeyfe/hd-core';
+import type {
+  BTCPublicKey,
+  KnownDevice,
+  RefTransaction,
+} from '@onekeyfe/hd-core';
 import type { Messages } from '@onekeyfe/hd-transport';
 import { AddressEncodings, Decimals, NETWORK } from '../constants';
-import { BitcoinNetwork, INetwork } from '../types';
-import { getFromLocalStorage } from '../utils';
+import {
+  AddressValidation,
+  BitcoinNetwork,
+  INetwork,
+  TransactionMixin,
+} from '../types';
+import { checkIsDefined, getFromLocalStorage, validator } from '../utils';
 import { blockbook } from './Blockbook';
 import { serviceHardware } from './ServiceHardware';
 // You must wrap a tiny-secp256k1 compatible implementation
@@ -193,12 +202,14 @@ export default class BitcoinProvider {
     amount,
     xpub,
     derivePath,
+    currentAddress,
     device,
   }: {
     to: string;
     amount: string;
     xpub: string;
     derivePath: string;
+    currentAddress: string;
     device: KnownDevice;
   }) {
     const encodingXpub = this.getOutputDescriptor(xpub);
@@ -221,13 +232,29 @@ export default class BitcoinProvider {
       },
     ];
 
-    const { inputs, outputs, fee } = coinSelect(utxos, targets, feeRate);
-    if (!inputs || !outputs || isNil(fee)) {
+    const {
+      inputs,
+      outputs: coinSelectOutputs,
+      fee,
+    } = coinSelect(utxos, targets, feeRate);
+    if (!inputs || !coinSelectOutputs || isNil(fee)) {
       throw new Error('Failed to select UTXOs');
     }
 
+    const changePath = derivePath;
+    const outputs = coinSelectOutputs?.map((o) => {
+      if (!o.address) {
+        return {
+          ...o,
+          path: changePath,
+          address: currentAddress, // change address
+        };
+      }
+      return o;
+    });
+
     const prevTxids = Array.from(new Set(inputs.map((i) => i.txid as string)));
-    const pathMap: Record<string, string> = {};
+    const pathMap: Record<string, string> = { [currentAddress]: derivePath };
     const addresses = inputs.map((input) => input.address);
     for (const utxo of inputs) {
       const { address, path } = utxo;
@@ -235,8 +262,19 @@ export default class BitcoinProvider {
         pathMap[address] = path;
       }
     }
+
+    const pubkeyMap: Record<string, BTCPublicKey> = {};
+    const pubkeys = await serviceHardware.getPublicKey(Object.values(pathMap));
+    pubkeys.forEach((pubkey) => {
+      pubkeyMap[pubkey.path] = pubkey;
+    });
+    console.log('pubkeys: =====>>>>>: ', pubkeys);
+
     const prevTxs = await this.collectTxs(prevTxids);
-    const response = await serviceHardware.btcSignTransaction(
+
+    const psbt = await this.buildPsbt(inputs, outputs, prevTxs, pubkeyMap);
+    const unsignedPsbt = psbt.toBase64();
+    const { signatures } = await serviceHardware.btcSignTransaction(
       device.connectId ?? '',
       device.deviceId ?? '',
       {
@@ -244,12 +282,34 @@ export default class BitcoinProvider {
         inputs: inputs.map((i) =>
           this.buildHardwareInput(i, pathMap[i.address])
         ),
-        outputs: outputs.map((o) => this.buildHardwareOutput(o, derivePath)),
+        outputs: outputs.map((o) => this.buildHardwareOutput(o)),
         refTxs: Object.values(prevTxs).map((i) => this.buildPrevTx(i)),
       }
     );
+    console.log('response ====>>>: ', signatures);
 
-    console.log('response ====>>>: ', response);
+    // eslint-disable-next-line no-plusplus
+    for (let i = 0; i < inputs.length; i++) {
+      const input = inputs[i];
+      psbt.updateInput(i, {
+        partialSig: [
+          {
+            pubkey: Buffer.from(pubkeyMap[input.path].node.public_key, 'hex'),
+            signature: Buffer.concat([
+              Buffer.from(signatures[i], 'hex'),
+              Buffer.from([0x01]),
+            ]),
+          },
+        ],
+      });
+    }
+    console.log('====>final psbt: ', psbt);
+    console.log(psbt.toBase64());
+    psbt.validateSignaturesOfAllInputs(validator);
+    return {
+      unsignedPsbt,
+      finalPsbt: psbt.toBase64(),
+    };
   }
 
   getOutputDescriptor(xpub: string) {
@@ -286,6 +346,137 @@ export default class BitcoinProvider {
     return lookup;
   }
 
+  async buildPsbt(
+    inputs: UTXO[],
+    outputs: Target[],
+    nonWitnessPrevTxs: Record<string, string>,
+    pubkeyMap: Record<string, BTCPublicKey>
+  ) {
+    const inputAddressesEncodings = await this.parseAddressEncodings(
+      inputs.map((i) => i.address)
+    );
+
+    const psbt = new BitcoinJS.Psbt({
+      network: this.network,
+    });
+    // eslint-disable-next-line no-plusplus
+    for (let i = 0; i < inputs.length; ++i) {
+      const input = inputs[i];
+      const encoding = inputAddressesEncodings[i];
+      const mixin: TransactionMixin = {};
+
+      mixin.bip32Derivation = [
+        {
+          path: input.path,
+          masterFingerprint: Buffer.from(
+            Number(pubkeyMap[input.path].root_fingerprint || 0)
+              .toString(16)
+              .padStart(8, '0'),
+            'hex'
+          ),
+          pubkey: Buffer.from(pubkeyMap[input.path].node.public_key, 'hex'),
+        },
+      ];
+
+      mixin.nonWitnessUtxo = Buffer.from(
+        nonWitnessPrevTxs[input.txid as string],
+        'hex'
+      );
+
+      switch (encoding) {
+        case AddressEncodings.P2PKH:
+          break;
+        case AddressEncodings.P2WPKH:
+          mixin.witnessUtxo = {
+            script: checkIsDefined(
+              this.pubkeyToPayment(
+                Buffer.from(pubkeyMap[input.path].node.public_key, 'hex'),
+                encoding
+              )
+            ).output as Buffer,
+            value: input.value,
+          };
+          break;
+        case AddressEncodings.P2SH_P2WPKH:
+          {
+            const payment = checkIsDefined(
+              this.pubkeyToPayment(
+                Buffer.from(pubkeyMap[input.path].node.public_key, 'hex'),
+                encoding
+              )
+            );
+            mixin.witnessUtxo = {
+              script: payment.output as Buffer,
+              value: input.value,
+            };
+            mixin.redeemScript = payment.redeem?.output as Buffer;
+          }
+          break;
+        case AddressEncodings.P2TR:
+          {
+            const payment = checkIsDefined(
+              this.pubkeyToPayment(
+                Buffer.from(pubkeyMap[input.path].node.public_key, 'hex'),
+                encoding
+              )
+            );
+            mixin.witnessUtxo = {
+              script: payment.output as Buffer,
+              value: input.value,
+            };
+            mixin.tapInternalKey = payment.internalPubkey;
+          }
+          break;
+        default:
+          break;
+      }
+
+      console.log('===>mixin: ', mixin);
+      psbt.addInput({
+        hash: input.txid,
+        index: input.vout,
+        ...mixin,
+        // witnessUtxo: mixin.witnessUtxo,
+        // redeemScript: mixin.redeemScript,
+        // nonWitnessUtxo: mixin.nonWitnessUtxo,
+        // nonWitnessUtxo: mixin.nonWitnessUtxo,
+      });
+    }
+
+    outputs.forEach((output) => {
+      const mixin: TransactionMixin = {};
+      if (output.path) {
+        mixin.bip32Derivation = [
+          {
+            path: output.path,
+            masterFingerprint: Buffer.from(
+              Number(pubkeyMap[output.path].root_fingerprint || 0)
+                .toString(16)
+                .padStart(8, '0'),
+              'hex'
+            ),
+            pubkey: Buffer.from(pubkeyMap[output.path].node.public_key, 'hex'),
+          },
+        ];
+      }
+      psbt.addOutput({
+        address: output.address,
+        value: output.value ?? 0,
+        ...mixin,
+      });
+    });
+
+    console.log('=======>>>>>>>>>>>Initialize PSBT: ', psbt);
+    console.log(psbt.toBase64());
+
+    return psbt;
+  }
+
+  comparePsbt(psbtStr: string) {
+    const psbt = BitcoinJS.Psbt.fromBase64(psbtStr);
+    console.log('===>compare psbt: ', psbt);
+  }
+
   buildHardwareInput(input: UTXO, path: string): Messages.TxInputType {
     const addressN = getHDPath(path);
     const scriptType = getScriptType(addressN);
@@ -299,12 +490,9 @@ export default class BitcoinProvider {
     };
   }
 
-  buildHardwareOutput(
-    output: Target,
-    changePath: string
-  ): Messages.TxOutputType {
-    if (!output.address) {
-      const addressN = getHDPath(changePath);
+  buildHardwareOutput(output: Target): Messages.TxOutputType {
+    if (output.path) {
+      const addressN = getHDPath(output.path);
       const scriptType = getOutputScriptType(addressN);
       return {
         script_type: scriptType,
@@ -337,6 +525,71 @@ export default class BitcoinProvider {
       })),
       lock_time: tx.locktime,
     };
+  }
+
+  private parseAddressEncodings(addresses: string[]): Promise<string[]> {
+    return Promise.all(
+      addresses.map((address) => this.verifyAddress(address))
+    ).then((results) =>
+      results
+        .filter((i) => i.isValid)
+        .map((i) => (i as { encoding: string }).encoding)
+    );
+  }
+
+  private verifyAddress(address: string): AddressValidation {
+    let encoding: string | undefined;
+
+    try {
+      const decoded = BitcoinJS.address.fromBase58Check(address);
+      if (
+        decoded.version === this.network.pubKeyHash &&
+        decoded.hash.length === 20
+      ) {
+        encoding = AddressEncodings.P2PKH;
+      } else if (
+        decoded.version === this.network.scriptHash &&
+        decoded.hash.length === 20
+      ) {
+        encoding = AddressEncodings.P2SH_P2WPKH;
+      }
+    } catch (e) {
+      try {
+        const decoded = BitcoinJS.address.fromBech32(address);
+        if (
+          decoded.version === 0x00 &&
+          decoded.prefix === this.network.bech32 &&
+          decoded.data.length === 20
+        ) {
+          encoding = AddressEncodings.P2WPKH;
+        } else if (
+          decoded.version === 0x00 &&
+          decoded.prefix === this.network.bech32 &&
+          decoded.data.length === 32
+        ) {
+          encoding = AddressEncodings.P2WSH;
+        } else if (
+          decoded.version === 0x01 &&
+          decoded.prefix === this.network.bech32 &&
+          decoded.data.length === 32
+        ) {
+          encoding = AddressEncodings.P2TR;
+        }
+      } catch (_) {
+        // ignore error
+      }
+    }
+
+    return encoding
+      ? {
+          displayAddress: address,
+          normalizedAddress: address,
+          encoding,
+          isValid: true,
+        }
+      : {
+          isValid: false,
+        };
   }
 }
 

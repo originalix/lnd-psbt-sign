@@ -1,5 +1,6 @@
 import { UI_REQUEST } from '@onekeyfe/hd-core';
 import type {
+  BTCPublicKey,
   BTCSignTransactionParams,
   CoreMessage,
   KnownDevice,
@@ -41,21 +42,34 @@ export default class ServiceHardware {
     return null;
   }
 
-  async getPublicKey(path: string) {
+  async getPublicKey(path: string[]): Promise<BTCPublicKey[]> {
     if (!this.device?.connectId) {
       throw new Error('device not found');
     }
     const hardwareSDK = await this.getSDKInstance();
+    const params =
+      path.length <= 1
+        ? {
+            path: path[0],
+            coin: this.getCoin(),
+            showOnOneKey: false,
+          }
+        : {
+            bundle: path.map((p) => ({
+              path: p,
+              coin: this.getCoin(),
+              showOnOneKey: false,
+            })),
+          };
     const response = await hardwareSDK.btcGetPublicKey(
       this.device.connectId,
       this.device.deviceId ?? '',
-      {
-        path,
-        coin: this.getCoin(),
-        showOnOneKey: false,
-      }
+      params
     );
     if (response.success) {
+      if (path.length <= 1) {
+        return [response.payload as unknown as BTCPublicKey];
+      }
       return response.payload;
     }
     throw new Error(response.payload.error);

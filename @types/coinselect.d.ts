@@ -14,6 +14,7 @@ declare module 'coinselect' {
   export interface Target {
     address: string;
     value?: number;
+    path?: string;
   }
   export interface SelectedUTXO {
     inputs?: UTXO[];
