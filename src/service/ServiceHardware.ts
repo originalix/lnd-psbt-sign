@@ -1,5 +1,9 @@
 import { UI_REQUEST } from '@onekeyfe/hd-core';
-import type { CoreMessage, KnownDevice } from '@onekeyfe/hd-core';
+import type {
+  BTCSignTransactionParams,
+  CoreMessage,
+  KnownDevice,
+} from '@onekeyfe/hd-core';
 import { getHardwareSDKInstance } from './hardwareInstance';
 import { BitcoinNetwork } from '../types';
 import { getFromLocalStorage } from '../utils';
@@ -54,6 +58,26 @@ export default class ServiceHardware {
     if (response.success) {
       return response.payload;
     }
+    throw new Error(response.payload.error);
+  }
+
+  async btcSignTransaction(
+    connectId: string,
+    deviceId: string,
+    params: BTCSignTransactionParams
+  ) {
+    const hardwareSDK = await this.getSDKInstance();
+    const response = await hardwareSDK.btcSignTransaction(connectId, deviceId, {
+      coin: params.coin,
+      inputs: params.inputs,
+      outputs: params.outputs,
+      refTxs: params.refTxs,
+    });
+
+    if (response.success) {
+      return response.payload;
+    }
+
     throw new Error(response.payload.error);
   }
 

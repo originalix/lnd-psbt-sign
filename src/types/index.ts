@@ -1,7 +1,7 @@
 import * as BitcoinJS from 'bitcoinjs-lib';
-import { AddressEncodings } from './constants';
+import { AddressEncodings } from '../constants';
 
-export interface UTXO {
+export interface IUTXO {
   txid: string;
   vout: number;
   value: string;

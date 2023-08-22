@@ -1,6 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import memoizee from 'memoizee';
-import { BitcoinNetwork, MempoolRecommendedFee, UTXO } from '../types';
+import { BitcoinNetwork, MempoolRecommendedFee, IUTXO } from '../types';
 import { getFromLocalStorage } from '../utils';
 import { NETWORK } from '../constants';
 
@@ -10,16 +10,20 @@ export default class Blockbook {
   network: BitcoinNetwork;
 
   constructor() {
+    this.network = getFromLocalStorage(NETWORK, 'mainnet');
+    const baseURL =
+      this.network === 'mainnet'
+        ? 'https://node.onekey.so/btc'
+        : 'https://node.onekey.so/tbtc';
     this.request = axios.create({
-      url: 'https://node.onekey.so/btc',
+      baseURL,
       timeout: 20000,
     });
-    this.network = getFromLocalStorage(NETWORK, 'mainnet');
   }
 
-  getUtxos: (xpub: string) => Promise<UTXO[]> = memoizee(
+  getUtxos: (xpub: string) => Promise<IUTXO[]> = memoizee(
     (xpub: string) =>
-      this.request.get<UTXO[]>(`/api/v2/utxo/${xpub}`).then((res) => res.data),
+      this.request.get<IUTXO[]>(`/api/v2/utxo/${xpub}`).then((res) => res.data),
     {
       promise: true,
       maxAge: 60 * 1000,
@@ -30,7 +34,9 @@ export default class Blockbook {
     () =>
       axios
         .get<MempoolRecommendedFee>(
-          'https://mempool.space/api/v1/fees/recommended'
+          this.network === 'mainnet'
+            ? 'https://mempool.space/api/v1/fees/recommended'
+            : 'https://mempool.space/testnet/api/v1/fees/recommended'
         )
         .then((res) => res.data),
     {
@@ -38,6 +44,17 @@ export default class Blockbook {
       maxAge: 60 * 1000,
     }
   );
+
+  async getRawTransaction(txid: string): Promise<string> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const resp = await this.request
+      .get(`/api/v2/tx/${txid}`)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      .then((i) => i.data);
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return resp.hex as unknown as string;
+  }
 }
 
 const blockbook = new Blockbook();

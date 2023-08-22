@@ -7,3 +7,5 @@ export enum AddressEncodings {
 }
 
 export const NETWORK = 'NETWORK';
+export const PREV_XPUB = 'PREV_XPUB';
+export const Decimals = 8;

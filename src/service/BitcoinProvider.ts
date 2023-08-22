@@ -1,10 +1,22 @@
+import { isNil } from 'lodash';
 import BIP32Factory, { BIP32Interface } from 'bip32';
 import * as ecc from '@bitcoin-js/tiny-secp256k1-asmjs';
 import bs58check from 'bs58check';
 import * as BitcoinJS from 'bitcoinjs-lib';
-import { AddressEncodings, NETWORK } from '../constants';
+import coinSelect, { Target, UTXO } from 'coinselect';
+import BigNumber from 'bignumber.js';
+import {
+  getHDPath,
+  getScriptType,
+  getOutputScriptType,
+} from '@onekeyfe/hd-core';
+import type { KnownDevice, RefTransaction } from '@onekeyfe/hd-core';
+import type { Messages } from '@onekeyfe/hd-transport';
+import { AddressEncodings, Decimals, NETWORK } from '../constants';
 import { BitcoinNetwork, INetwork } from '../types';
 import { getFromLocalStorage } from '../utils';
+import { blockbook } from './Blockbook';
+import { serviceHardware } from './ServiceHardware';
 // You must wrap a tiny-secp256k1 compatible implementation
 const bip32 = BIP32Factory(ecc);
 
@@ -174,6 +186,157 @@ export default class BitcoinProvider {
     }
 
     return payment;
+  }
+
+  async buildTransaction({
+    to,
+    amount,
+    xpub,
+    derivePath,
+    device,
+  }: {
+    to: string;
+    amount: string;
+    xpub: string;
+    derivePath: string;
+    device: KnownDevice;
+  }) {
+    const encodingXpub = this.getOutputDescriptor(xpub);
+    const originUtxos = await blockbook.getUtxos(encodingXpub);
+    const recommendFee = await blockbook.getRecommendedFee();
+    const feeRate = recommendFee.fastestFee;
+    const utxos: UTXO[] = originUtxos.map(
+      ({ txid, vout, value, address, path }) => ({
+        txid,
+        vout,
+        value: parseInt(value),
+        address,
+        path,
+      })
+    );
+    const targets = [
+      {
+        address: to,
+        value: parseInt(BigNumber(amount).shiftedBy(Decimals).toFixed()),
+      },
+    ];
+
+    const { inputs, outputs, fee } = coinSelect(utxos, targets, feeRate);
+    if (!inputs || !outputs || isNil(fee)) {
+      throw new Error('Failed to select UTXOs');
+    }
+
+    const prevTxids = Array.from(new Set(inputs.map((i) => i.txid as string)));
+    const pathMap: Record<string, string> = {};
+    const addresses = inputs.map((input) => input.address);
+    for (const utxo of inputs) {
+      const { address, path } = utxo;
+      if (addresses.includes(address)) {
+        pathMap[address] = path;
+      }
+    }
+    const prevTxs = await this.collectTxs(prevTxids);
+    const response = await serviceHardware.btcSignTransaction(
+      device.connectId ?? '',
+      device.deviceId ?? '',
+      {
+        coin: this.networkType === 'mainnet' ? 'btc' : 'test',
+        inputs: inputs.map((i) =>
+          this.buildHardwareInput(i, pathMap[i.address])
+        ),
+        outputs: outputs.map((o) => this.buildHardwareOutput(o, derivePath)),
+        refTxs: Object.values(prevTxs).map((i) => this.buildPrevTx(i)),
+      }
+    );
+
+    console.log('response ====>>>: ', response);
+  }
+
+  getOutputDescriptor(xpub: string) {
+    if (!xpub) {
+      throw new Error('xpub is required');
+    }
+    const decodedXpub = Buffer.from(bs58check.decode(xpub));
+    const versionBytes = parseInt(decodedXpub.slice(0, 4).toString('hex'), 16);
+    const encoding = this.versionBytesToEncodings.public[versionBytes][0];
+    switch (encoding) {
+      case AddressEncodings.P2PKH:
+        return `pkh(${xpub})`;
+      case AddressEncodings.P2SH_P2WPKH:
+        return `sh(wpkh(${xpub}))`;
+      case AddressEncodings.P2WPKH:
+        return `wpkh(${xpub})`;
+      case AddressEncodings.P2TR:
+        return `tr(${xpub})`;
+      default:
+        return xpub;
+    }
+  }
+
+  async collectTxs(txids: string[]): Promise<Record<string, string>> {
+    const lookup: Record<string, string> = {};
+
+    for (let i = 0, batchSize = 5; i < txids.length; i += batchSize) {
+      const batchTxids = txids.slice(i, i + batchSize);
+      const txs = await Promise.all(
+        batchTxids.map((txid) => blockbook.getRawTransaction(txid))
+      );
+      batchTxids.forEach((txid, index) => (lookup[txid] = txs[index]));
+    }
+    return lookup;
+  }
+
+  buildHardwareInput(input: UTXO, path: string): Messages.TxInputType {
+    const addressN = getHDPath(path);
+    const scriptType = getScriptType(addressN);
+    // @ts-expect-error
+    return {
+      prev_index: input.vout,
+      prev_hash: input.txid as string,
+      amount: `${input.value}`,
+      address_n: addressN,
+      script_type: scriptType,
+    };
+  }
+
+  buildHardwareOutput(
+    output: Target,
+    changePath: string
+  ): Messages.TxOutputType {
+    if (!output.address) {
+      const addressN = getHDPath(changePath);
+      const scriptType = getOutputScriptType(addressN);
+      return {
+        script_type: scriptType,
+        address_n: addressN,
+        amount: `${output.value ?? 0}`,
+      };
+    }
+    return {
+      script_type: 'PAYTOADDRESS',
+      address: output.address,
+      amount: `${output.value ?? 0}`,
+    };
+  }
+
+  private buildPrevTx(rawTx: string): RefTransaction {
+    const tx = BitcoinJS.Transaction.fromHex(rawTx);
+
+    return {
+      hash: tx.getId(),
+      version: tx.version,
+      inputs: tx.ins.map((i) => ({
+        prev_hash: i.hash.reverse().toString('hex'),
+        prev_index: i.index,
+        script_sig: i.script.toString('hex'),
+        sequence: i.sequence,
+      })),
+      bin_outputs: tx.outs.map((o) => ({
+        amount: o.value,
+        script_pubkey: o.script.toString('hex'),
+      })),
+      lock_time: tx.locktime,
+    };
   }
 }
 
