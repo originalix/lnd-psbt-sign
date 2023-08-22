@@ -524,7 +524,7 @@ export default class BitcoinProvider {
     );
   }
 
-  private verifyAddress(address: string): AddressValidation {
+  verifyAddress(address: string): AddressValidation {
     let encoding: string | undefined;
 
     try {
