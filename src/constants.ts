@@ -5,3 +5,5 @@ export enum AddressEncodings {
   P2WSH = 'P2WSH', // BIP-84 P2WSH
   P2TR = 'P2TR', // BIP-86 P2TR
 }
+
+export const NETWORK = 'NETWORK';

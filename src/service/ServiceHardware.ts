@@ -1,9 +1,18 @@
 import { UI_REQUEST } from '@onekeyfe/hd-core';
 import type { CoreMessage, KnownDevice } from '@onekeyfe/hd-core';
 import { getHardwareSDKInstance } from './hardwareInstance';
+import { BitcoinNetwork } from '../types';
+import { getFromLocalStorage } from '../utils';
+import { NETWORK } from '../constants';
 
 export default class ServiceHardware {
   device: KnownDevice | null = null;
+
+  network: BitcoinNetwork;
+
+  constructor() {
+    this.network = getFromLocalStorage(NETWORK, 'mainnet');
+  }
 
   getSDKInstance() {
     return getHardwareSDKInstance().then((instance) => {
@@ -38,7 +47,7 @@ export default class ServiceHardware {
       this.device.deviceId ?? '',
       {
         path,
-        coin: 'btc',
+        coin: this.getCoin(),
         showOnOneKey: false,
       }
     );
@@ -46,6 +55,10 @@ export default class ServiceHardware {
       return response.payload;
     }
     throw new Error(response.payload.error);
+  }
+
+  private getCoin() {
+    return this.network === 'mainnet' ? 'btc' : 'test';
   }
 }
 
