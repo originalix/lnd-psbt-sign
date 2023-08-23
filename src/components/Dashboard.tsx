@@ -104,9 +104,11 @@ function Dashboard() {
     try {
       const validAddress = bitcoinProvider.verifyAddress(address);
       if (!validAddress.isValid) {
+        console.log('validAddress: ', validAddress);
         throw new Error('Invalid address');
       }
-    } catch {
+    } catch (e) {
+      console.error(e);
       toast({
         title: 'Error',
         description: 'Invalid Address',

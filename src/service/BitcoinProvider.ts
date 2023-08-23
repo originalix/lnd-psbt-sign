@@ -1,5 +1,5 @@
 import { isNil } from 'lodash';
-import BIP32Factory, { BIP32Interface } from 'bip32';
+import BIP32Factory from 'bip32';
 import * as ecc from '@bitcoin-js/tiny-secp256k1-asmjs';
 import bs58check from 'bs58check';
 import * as BitcoinJS from 'bitcoinjs-lib';
@@ -28,6 +28,7 @@ import { blockbook } from './Blockbook';
 import { serviceHardware } from './ServiceHardware';
 // You must wrap a tiny-secp256k1 compatible implementation
 const bip32 = BIP32Factory(ecc);
+BitcoinJS.initEccLib(ecc);
 
 const mainnet = {
   ...BitcoinJS.networks.bitcoin,

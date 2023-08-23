@@ -89,7 +89,9 @@
   "scripts": {
     "start": "PORT=5521 GENERATE_SOURCEMAP=false node scripts/start.js",
     "build": "GENERATE_SOURCEMAP=false node scripts/build.js",
-    "test": "craco test"
+    "test": "node scripts/test.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "browserslist": {
     "production": [
@@ -108,7 +110,6 @@
     "@types/bs58check": "^2.1.0",
     "@types/lodash": "^4.14.197",
     "@types/memoizee": "^0.4.8",
-    "eslint": "^8.0.0",
     "prettier": "^2.7.1"
   },
   "jest": {
