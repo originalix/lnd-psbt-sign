@@ -527,7 +527,7 @@ export default class BitcoinProvider {
 
   verifyAddress(address: string): AddressValidation {
     let encoding: string | undefined;
-
+    console.log('====>address: ', address);
     try {
       const decoded = BitcoinJS.address.fromBase58Check(address);
       if (
@@ -535,13 +535,16 @@ export default class BitcoinProvider {
         decoded.hash.length === 20
       ) {
         encoding = AddressEncodings.P2PKH;
+        console.log('====>P2PKH: ');
       } else if (
         decoded.version === this.network.scriptHash &&
         decoded.hash.length === 20
       ) {
         encoding = AddressEncodings.P2SH_P2WPKH;
+        console.log('====>P2SH_P2WPKH: ');
       }
     } catch (e) {
+      console.log('===>>>first catch e: ', e);
       try {
         const decoded = BitcoinJS.address.fromBech32(address);
         if (
@@ -550,24 +553,28 @@ export default class BitcoinProvider {
           decoded.data.length === 20
         ) {
           encoding = AddressEncodings.P2WPKH;
+          console.log('====>P2WPKH: ');
         } else if (
           decoded.version === 0x00 &&
           decoded.prefix === this.network.bech32 &&
           decoded.data.length === 32
         ) {
           encoding = AddressEncodings.P2WSH;
+          console.log('====>P2WSH: ');
         } else if (
           decoded.version === 0x01 &&
           decoded.prefix === this.network.bech32 &&
           decoded.data.length === 32
         ) {
           encoding = AddressEncodings.P2TR;
+          console.log('====>P2TR: ');
         }
-      } catch (_) {
+      } catch (err) {
         // ignore error
+        console.log('===>>>second catch e: ', err);
       }
     }
-
+    console.log('===>encoding: ', encoding);
     return encoding
       ? {
           displayAddress: address,

@@ -93,7 +93,8 @@ function Dashboard() {
   const [unsignedPsbtCode, setUnSignedPsbtCode] = useState('');
   const [finalPsbtCode, setFinalPsbtCode] = useState('');
   const onSignPsbt = useCallback(async () => {
-    if (!address || !address.length) {
+    const addr = address.trim();
+    if (!addr || !addr.length) {
       toast({
         title: 'Error',
         description: 'Please enter address',
@@ -102,7 +103,7 @@ function Dashboard() {
       return;
     }
     try {
-      const validAddress = bitcoinProvider.verifyAddress(address);
+      const validAddress = bitcoinProvider.verifyAddress(addr);
       if (!validAddress.isValid) {
         console.log('validAddress: ', validAddress);
         throw new Error('Invalid address');
@@ -126,7 +127,7 @@ function Dashboard() {
       return;
     }
 
-    const signedResult = await signTx(derivePath, address, amount);
+    const signedResult = await signTx(derivePath, addr, amount);
     if (signedResult) {
       setUnSignedPsbtCode(signedResult.unsignedPsbt);
       setFinalPsbtCode(signedResult.finalPsbt);
