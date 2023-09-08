@@ -6,27 +6,19 @@ import type {
   KnownDevice,
 } from '@onekeyfe/hd-core';
 import { getHardwareSDKInstance } from './hardwareInstance';
-import { BitcoinNetwork } from '../types';
-import { getFromLocalStorage } from '../utils';
 import {
-  NETWORK,
   UI_REQUEST_REQUEST_BUTTON,
   UI_REQUEST_REQUEST_PASSPHRASE,
   UI_REQUEST_REQUEST_PIN,
   UI_REQUEST_CLOSE_UI_WINDOW,
 } from '../constants';
 import eventBus from '../utils/event-bus';
+import { BitcoinNetwork } from '../types';
 
 export default class ServiceHardware {
   device: KnownDevice | null = null;
 
-  network: BitcoinNetwork;
-
   isRegistred = false;
-
-  constructor() {
-    this.network = getFromLocalStorage(NETWORK, 'mainnet');
-  }
 
   getSDKInstance() {
     return getHardwareSDKInstance().then((instance) => {
@@ -77,22 +69,26 @@ export default class ServiceHardware {
     return null;
   }
 
-  async getPublicKey(path: string[]): Promise<BTCPublicKey[]> {
+  async getPublicKey(
+    path: string[],
+    isTestnet: boolean
+  ): Promise<BTCPublicKey[]> {
     if (!this.device?.connectId) {
       throw new Error('device not found');
     }
+    const network = isTestnet ? 'testnet' : 'mainnet';
     const hardwareSDK = await this.getSDKInstance();
     const params =
       path.length <= 1
         ? {
             path: path[0],
-            coin: this.getCoin(),
+            coin: this.getCoin(network),
             showOnOneKey: false,
           }
         : {
             bundle: path.map((p) => ({
               path: p,
-              coin: this.getCoin(),
+              coin: this.getCoin(network),
               showOnOneKey: false,
             })),
           };
@@ -129,8 +125,8 @@ export default class ServiceHardware {
     throw new Error(response.payload.error);
   }
 
-  private getCoin() {
-    return this.network === 'mainnet' ? 'btc' : 'test';
+  private getCoin(network: BitcoinNetwork) {
+    return network === 'mainnet' ? 'btc' : 'test';
   }
 }
 

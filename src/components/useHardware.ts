@@ -54,7 +54,7 @@ function useHardware(isTestnet: boolean) {
           return;
         }
         setIsLoading(true);
-        const pubkeyRes = await serviceHardware.getPublicKey([path]);
+        const pubkeyRes = await serviceHardware.getPublicKey([path], isTestnet);
         const pubkey = pubkeyRes[0];
         const relativePath = '0/0';
         const addressMap = bitcoinProvider.xpubToAddresses(pubkey.xpub, [
@@ -85,7 +85,7 @@ function useHardware(isTestnet: boolean) {
         setIsLoading(false);
       }
     },
-    [device, toast, bitcoinProvider]
+    [device, toast, bitcoinProvider, isTestnet]
   );
 
   return {

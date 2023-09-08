@@ -267,7 +267,10 @@ export default class BitcoinProvider {
     }
 
     const pubkeyMap: Record<string, BTCPublicKey> = {};
-    const pubkeys = await serviceHardware.getPublicKey(Object.values(pathMap));
+    const pubkeys = await serviceHardware.getPublicKey(
+      Object.values(pathMap),
+      this.networkType === 'testnet'
+    );
     pubkeys.forEach((pubkey) => {
       pubkeyMap[pubkey.path] = pubkey;
     });
