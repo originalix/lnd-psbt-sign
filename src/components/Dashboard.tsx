@@ -45,7 +45,7 @@ import {
   UI_REQUEST_REQUEST_PIN,
 } from '../constants';
 import { useHardware } from './useHardware';
-import { bitcoinProvider } from '../service/BitcoinProvider';
+import BitcoinProvider from '../service/BitcoinProvider';
 import eventBus from '../utils/event-bus';
 
 function Dashboard() {
@@ -60,7 +60,12 @@ function Dashboard() {
     [purpose, isTestnet, accountIndex]
   );
   const { device, getDevice, isConnecting, isLoading, accountAddress, signTx } =
-    useHardware();
+    useHardware(isTestnet);
+
+  const bitcoinProvider = useMemo(() => {
+    console.log('===>Dashboard new BitcoinProvider instance');
+    return new BitcoinProvider(isTestnet);
+  }, [isTestnet]);
 
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [eventContent, setEventContent] = useState('');
@@ -136,7 +141,7 @@ function Dashboard() {
       );
     }
     console.log('signedResult ===> : ', signedResult);
-  }, [toast, derivePath, address, amount, signTx, setValue]);
+  }, [toast, derivePath, address, amount, signTx, setValue, bitcoinProvider]);
   return (
     <Container p={6}>
       <Heading>Lightning network psbt sign</Heading>
@@ -181,7 +186,7 @@ function Dashboard() {
               <option value="49">49</option>
               <option value="44">44</option>
             </Select>
-            <Text>'/1'/</Text>
+            <Text>'/{isTestnet ? 1 : 0}'/</Text>
             <NumberInput
               size="sm"
               maxW={10}

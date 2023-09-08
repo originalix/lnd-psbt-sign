@@ -16,16 +16,16 @@ import type {
   RefTransaction,
 } from '@onekeyfe/hd-core';
 import type { Messages } from '@onekeyfe/hd-transport';
-import { AddressEncodings, Decimals, NETWORK } from '../constants';
+import { AddressEncodings, Decimals } from '../constants';
 import {
   AddressValidation,
   BitcoinNetwork,
   INetwork,
   TransactionMixin,
 } from '../types';
-import { checkIsDefined, getFromLocalStorage, validator } from '../utils';
-import { blockbook } from './Blockbook';
+import { checkIsDefined, validator } from '../utils';
 import { serviceHardware } from './ServiceHardware';
+import Blockbook from './Blockbook';
 // You must wrap a tiny-secp256k1 compatible implementation
 const bip32 = BIP32Factory(ecc);
 BitcoinJS.initEccLib(ecc);
@@ -79,9 +79,12 @@ export default class BitcoinProvider {
 
   networkType: BitcoinNetwork;
 
-  constructor() {
-    this.networkType = getFromLocalStorage(NETWORK, 'mainnet');
+  blockbook: Blockbook;
+
+  constructor(isTestnet: boolean) {
+    this.networkType = isTestnet ? 'testnet' : 'mainnet';
     this.network = this.networkType === 'mainnet' ? mainnet : testnet;
+    this.blockbook = new Blockbook();
   }
 
   private _versionBytesToEncodings?: {
@@ -213,8 +216,8 @@ export default class BitcoinProvider {
     device: KnownDevice;
   }) {
     const encodingXpub = this.getOutputDescriptor(xpub);
-    const originUtxos = await blockbook.getUtxos(encodingXpub);
-    const recommendFee = await blockbook.getRecommendedFee();
+    const originUtxos = await this.blockbook.getUtxos(encodingXpub);
+    const recommendFee = await this.blockbook.getRecommendedFee();
     const feeRate = recommendFee.fastestFee;
     const utxos: UTXO[] = originUtxos.map(
       ({ txid, vout, value, address, path }) => ({
@@ -337,7 +340,7 @@ export default class BitcoinProvider {
     for (let i = 0, batchSize = 5; i < txids.length; i += batchSize) {
       const batchTxids = txids.slice(i, i + batchSize);
       const txs = await Promise.all(
-        batchTxids.map((txid) => blockbook.getRawTransaction(txid))
+        batchTxids.map((txid) => this.blockbook.getRawTransaction(txid))
       );
       batchTxids.forEach((txid, index) => (lookup[txid] = txs[index]));
     }
@@ -582,7 +585,3 @@ export default class BitcoinProvider {
         };
   }
 }
-
-const bitcoinProvider = new BitcoinProvider();
-
-export { bitcoinProvider };

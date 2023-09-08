@@ -1,10 +1,10 @@
 import { useToast } from '@chakra-ui/react';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { serviceHardware } from '../service/ServiceHardware';
-import { bitcoinProvider } from '../service/BitcoinProvider';
-import { blockbook } from '../service/Blockbook';
+import BitcoinProvider from '../service/BitcoinProvider';
 
-function useHardware() {
+function useHardware(isTestnet: boolean) {
+  console.log('===>Renderrrr ', isTestnet);
   const toast = useToast();
   const [device, setDevice] = useState<typeof serviceHardware.device>(
     serviceHardware.device
@@ -29,9 +29,14 @@ function useHardware() {
     }
   }, [toast]);
 
+  const bitcoinProvider = useMemo(() => {
+    console.log('===>useHardware new BitcoinProvider instance');
+    return new BitcoinProvider(isTestnet);
+  }, [isTestnet]);
+
   useEffect(() => {
-    blockbook.getRecommendedFee();
-  }, []);
+    bitcoinProvider.blockbook.getRecommendedFee();
+  }, [bitcoinProvider]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [accountAddress, setAccountAddress] = useState('');
@@ -80,7 +85,7 @@ function useHardware() {
         setIsLoading(false);
       }
     },
-    [device, toast]
+    [device, toast, bitcoinProvider]
   );
 
   return {
